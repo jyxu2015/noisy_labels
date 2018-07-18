@@ -207,127 +207,29 @@ elif args.dataset=='cifar100':
     nb_classes = 100
     img_color, img_rows, img_cols = 3, 32, 32
 img_size = img_color*img_rows*img_cols
-if CNN:
-    # number of convolutional filters to use
-    nb_filters = 32
-    # size of pooling area for max pooling
-    nb_pool = 2
-    # convolution kernel size
-    nb_conv = 3
-    nhiddens = [512]
-    opt = 'adam' # SGD(lr=0.01, decay=1e-6, momentum=0.9, nesterov=True)
 
-    DROPOUT=0.5
-    weight_decay = None
-else:
+if True: # setting of MLPs
     nhiddens = [500, 300]
     DROPOUT=0.5
     weight_decay = None # 1e-4
     opt='adam'
 
-# We train with some of the training labels permuted by a fixed permutation
-# OR generate a random permutation (change seed to have something different) or
-# use a cyclic permutation
-# # Repeat training with noise
-if args.perm.startswith('random'):
-    if args.perm == 'random':
-        np.random.seed(seed)  # for reproducibility
-        random.seed(seed)
-    else:
-        perm_seed = int(args.perm[len('random'):])
-        np.random.seed(perm_seed)  # for reproducibility
-        random.seed(perm_seed)
-
-    # find a permutation with no stationary points
-    while True:
-        perm = np.random.permutation(nb_classes)
-        if np.all(perm != np.arange(nb_classes)):
-            break
-
-    np.random.seed(seed)  # for reproducibility
-    random.seed(seed)
-
-elif args.perm == 'cyclic':
-    perm = np.array([1,2,3,4,5,6,7,8,9,0])
-elif args.perm == 'reed':
+if args.perm == 'reed': #default
     # noise permutation: use this permutation (from Reed)
     perm = np.array([7, 9, 0, 4, 2, 1, 3, 5, 6, 8])  # noise permutation
-else:
-    perm = args.perm
+
 
 # baseline model. We use the `Sequential` model from keras
-# [cnn example](https://github.com/fchollet/keras/blob/master/examples/cifar10_cnn.py)
 #  and keras [mlp example](https://github.com/fchollet/keras/blob/master/examples/mnist_mlp.py)
-#  as a single layer which computes the last hidden layer which we then use to
-#  compute the baseline and as an input to the channel matrix
-# the number of labels is adjusted to the data
+#  as a single layer which computes the last hidden layer which we then use to compute the baseline and as an 
+#input to the channel matrix the number of labels is adjusted to the data
 regularizer = l2(weight_decay) if weight_decay else None
 
-if isinstance(perm, basestring) and perm in ['weak','weak_hard','strong']:
-    weak_model = Sequential(name='weak')
-
-    if perm == 'strong':
-        if CNN:
-            weak_model.add(Convolution2D(nb_filters, nb_conv, nb_conv,
-                                            border_mode='valid',
-                                            input_shape=(img_color, img_rows, img_cols)))
-            weak_model.add(Activation('relu'))
-            weak_model.add(Convolution2D(nb_filters, nb_conv, nb_conv))
-            weak_model.add(Activation('relu'))
-            weak_model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
-            weak_model.add(Dropout(0.25))
-
-            weak_model.add(Convolution2D(nb_filters*2, nb_conv, nb_conv, border_mode='same'))
-            weak_model.add(Activation('relu'))
-            weak_model.add(Convolution2D(nb_filters*2, nb_conv, nb_conv))
-            weak_model.add(Activation('relu'))
-            weak_model.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
-            weak_model.add(Dropout(0.25))
-
-            weak_model.add(Flatten())
-            for nhidden in nhiddens:
-                weak_model.add(Dense(nhidden, W_regularizer=regularizer))
-                weak_model.add(Activation('relu'))
-                weak_model.add(Dropout(DROPOUT))
-        else:
-            for i, nhidden in enumerate(nhiddens):
-                weak_model.add(Dense(nhidden,
-                                     input_shape=(img_size,) if i == 0 else [],
-                                     W_regularizer=regularizer))
-                weak_model.add(Activation('relu'))
-                weak_model.add(Dropout(DROPOUT))
-
-    weak_model.add(Dense(nb_classes, activation='softmax',
-                         name='weak_dense',
-                         input_shape=(img_size,)))
-    weak_model.compile(loss='categorical_crossentropy', optimizer=opt)
-    fname_weak_random_weights = '%s.%s.%s_model.hdf5' % (FN, experiment,perm)
-    weak_model.save_weights(fname_weak_random_weights, overwrite=True)
 
 hidden_layers = Sequential(name='hidden')
-if CNN:
-    hidden_layers.add(Convolution2D(nb_filters, nb_conv, nb_conv,
-                            border_mode='valid',
-                            input_shape=(img_color, img_rows, img_cols)))
-    hidden_layers.add(Activation('relu'))
-    hidden_layers.add(Convolution2D(nb_filters, nb_conv, nb_conv))
-    hidden_layers.add(Activation('relu'))
-    hidden_layers.add(MaxPooling2D(pool_size=(nb_pool, nb_pool)))
-    hidden_layers.add(Dropout(0.25))
 
-    hidden_layers.add(Convolution2D(nb_filters*2, 3, 3, border_mode='same'))
-    hidden_layers.add(Activation('relu'))
-    hidden_layers.add(Convolution2D(nb_filters*2, 3, 3))
-    hidden_layers.add(Activation('relu'))
-    hidden_layers.add(MaxPooling2D(pool_size=(2, 2)))
-    hidden_layers.add(Dropout(0.25))
 
-    hidden_layers.add(Flatten())
-    for nhidden in nhiddens:
-        hidden_layers.add(Dense(nhidden, W_regularizer=regularizer))
-        hidden_layers.add(Activation('relu'))
-        hidden_layers.add(Dropout(DROPOUT))
-else:
+if True: # not CNN only MLP
     for i, nhidden in enumerate(nhiddens):
         hidden_layers.add(Dense(nhidden,
                                 input_shape=(img_size,) if i == 0 else [],
@@ -336,7 +238,9 @@ else:
         hidden_layers.add(Dropout(DROPOUT))
 
 APRIOR_NOISE=0.46
-if trainable:
+
+
+if trainable: #default trainable = true
     bias_weights = (
         np.array([np.array([np.log(1. - APRIOR_NOISE)
                             if i == j else
@@ -344,21 +248,10 @@ if trainable:
                             for j in range(nb_classes)]) for i in
                   range(nb_classes)])
         + 0.01 * np.random.random((nb_classes, nb_classes)))
-else:
-    # use the ideal bias
-    if isinstance(perm, np.ndarray):
-        bias_weights = np.array([np.array([np.log(1.-APRIOR_NOISE)
-                                                if i == j else
-                                                (np.log(APRIOR_NOISE) if j == perm[i] else -1e8)
-                                                for j in range(nb_classes)])
-                                      for i in range(nb_classes)])
-    else:
-        bias_weights = np.array([np.array([np.log(1. - APRIOR_NOISE)
-                                           if i == j else
-                                           np.log(APRIOR_NOISE)/(nb_classes-1.)
-                                           for j in range(nb_classes)])
-                                 for i in range(nb_classes)])
-inputs = Input(shape=(img_color,img_rows,img_cols) if CNN else (img_size,))
+
+inputs = Input(shape=(img_size,))
+
+
 if MODEL == SIMPLE:
     # we need an input of constant=1 to derive the simple channel matrix from a regular softmax dense layer
     ones = Input(shape=(1,))
@@ -367,54 +260,42 @@ last_hidden = hidden_layers(inputs)
 
 baseline_output = Dense(nb_classes, activation='softmax', name='baseline', W_regularizer=regularizer)(last_hidden)
 
-if args.sparse is not None:
-    class SparseMaskDense(Dense):
-        """Keep a non trainable weights that should be either 1 or 0 for
-        each of the outputs. When 0 use a very negative fixed bias to suppress
-        that output."""
-        def build(self, input_shape):
-            super(SparseMaskDense, self).build(input_shape)
-            self.sparse_mask = K.zeros((self.output_dim,),
-                                     name='{}_sparse_mask'.format(self.name))
-            self.non_trainable_weights = [self.sparse_mask]
 
-        def call(self, x, mask=None):
-            output = K.dot(x, self.W)
-            if self.bias:
-                output += self.b
-            output = K.switch(self.sparse_mask, output, -1e20)
-            return self.activation(output)
-
-    channel_dense = SparseMaskDense
-else:
-    channel_dense = Dense
+# No sparse
+channel_dense = Dense
 
 
-if MODEL == REED_SOFT or MODEL == REED_HARD:
-    channeled_output = baseline_output
-else:
+if 1:
     if MODEL == SIMPLE:
         # use bias=False and ones[:,:1] (and not bias=True and zeros) because we
         #  dont really need both bias and weights and there is no simple way to
         #  throwaway the weights
-        channel_matrix = [channel_dense(nb_classes,
+        
+        # dense here is just a full-connect layer, and = channel dense 
+        
+        
+        #A Dense has 2 weight arrays: the main weight matrix, and a bias vector. 
+        # Therefore you have to provide a list of 2 numpy arrays as the weights argument. 
+      
+        channel_matrix = [Dense(nb_classes,
                                         activation='softmax',
                                         bias=False,
                                         name='dense_class%d'%i,
                                         trainable=trainable,
-                                        weights=[
-                                            bias_weights[i].reshape((1,-1))
-                                        ])(ones)
+                                        weights=[bias_weights[i].reshape((1,-1))]
+                                       )
+                          (ones)
                           for i in range(nb_classes)]
+        
     elif MODEL == COMPLEX:
-        channel_matrix = [channel_dense(nb_classes,
+        channel_matrix = [Dense(nb_classes,
                                         activation='softmax',
                                         name='dense_class%d'%i,
-                                        weights=[
-                                            W*(np.random.random((nhidden,nb_classes)) - 0.5),
-                                            bias_weights[i]
-                                        ])(last_hidden)
+                                        weights=[W*(np.random.random((nhidden,nb_classes)) - 0.5), bias_weights[i]]
+                                       )
+                          (last_hidden)
                           for i in range(nb_classes)]
+        
     channel_matrix = merge(channel_matrix, mode='concat')
     channel_matrix = Reshape((nb_classes,nb_classes))(channel_matrix)
 
@@ -431,30 +312,20 @@ else:
     # so we do a dot product of axis 1 in channel_matrix with axis 1 in baseline_output
     channeled_output = merge([channel_matrix, baseline_output], mode='dot', dot_axes=(1,1), name='channeled')
 
-def reed_soft_loss(y_true, y_pred):
-    '''Expects a binary class matrix instead of a vector of scalar classes.
-    '''
-    return -K.batch_dot(y_pred, K.log(y_pred+1e-8), axes=(1,1))
 
-def reed_hard_loss(y_true, y_pred):
-    '''Expects a binary class matrix instead of a vector of scalar classes.
-    '''
-    return -K.log(K.max(y_pred, axis=1, keepdims=True)+1e-8)
-
-if MODEL == REED_SOFT:
-    loss = reed_soft_loss
-elif MODEL == REED_HARD:
-    loss = reed_hard_loss    
-else:
+if 1: # not reed
     loss = 'categorical_crossentropy'
 
+        
 train_inputs = [inputs,ones] if MODEL == SIMPLE else inputs
-if BETA==1:
+
+
+if BETA==1: #model = simple, beta = 0, model = complex, beta = 0, so here is the baseline
     model = Model(input=train_inputs, output=baseline_output)
     model.compile(loss='categorical_crossentropy',
                   optimizer=opt,
                   metrics=['accuracy'])
-else:
+else: # either simple or complex, but Beta = 0 now, so loss weights only have a [0, 1], take consideration of baseline_output
     model = Model(input=train_inputs, output=[channeled_output, baseline_output])
     model.compile(loss=[loss, 'categorical_crossentropy'],loss_weights=[1.-BETA,BETA],
                   optimizer=opt,
@@ -556,36 +427,19 @@ if STRATIFY:
     experiment += 's'
 print('Experiment', experiment)
 
-if isinstance(perm, basestring) and perm in ['noise']:
-    noise = np.mod(y_train + np.random.randint(1,nb_classes, y_train.shape),
-                   nb_classes)
-elif isinstance(perm, basestring) and perm in ['strong', 'weak', 'weak_hard']:
-    noise = None
-elif isinstance(perm, np.ndarray):
+if isinstance(perm, np.ndarray): # the reed permuation
     noise = perm[y_train]
-else:
-    raise Exception('unknown perm %s'%perm)
+
 
 model.load_weights(fname_random_weights)
 
 def eval(model):
-    return dict(zip(model.metrics_names,model.evaluate(fix_input(X_test),
-                                                       fix_output(y_test),
-                                                       verbose=False)))
+    return dict(zip(model.metrics_names,model.evaluate(fix_input(X_test), fix_output(y_test), verbose=False)))
+
+
 print('Random classification', eval(model))
 
-if args.noise_levels is not None:
-    noise_levels = args.noise_levels
-elif isinstance(perm, basestring) and perm == 'noise':
-    noise_levels = np.array([0.2, 0.6,  0.7, 0.75, 0.8,  0.82,  0.84, 0.86,
-                             0.88,  0.9, 0.92, 0.95, 1 ])
-    # make sure you have enough (>nb_classes) labels (noised and not noised)
-    noise_levels = np.clip(noise_levels, 0.01, 0.99)
-elif isinstance(perm, basestring) and perm in ['weak','weak_hard','strong']:
-    # In weak the noise level is the number of training samples we use
-    # to train the weak classifier
-    noise_levels = np.array([50, 100, 300, 1000, 3000, 5000])
-else:
+if True:
     noise_levels = np.array([0.3, 0.36,  0.38,  0.4 ,  0.42,  0.44,  0.46, 0.47,
                          0.475, 0.48, 0.485, 0.49, 0.495, 0.5 ])
     # make sure you have enough (>nb_classes) labels (noised and not noised)
@@ -612,17 +466,7 @@ for noise_level in tqdm(noise_levels):
         else:
             noise_idx = np.random.choice(N, int(noise_level), replace=False)
 
-    if isinstance(perm, basestring) and perm in ['weak','weak_hard','strong']:
-        weak_model.load_weights(fname_weak_random_weights)
-        weak_model.fit(X_train[noise_idx],
-                       np_utils.to_categorical(y_train[noise_idx], nb_classes),
-                       batch_size=batch_size, nb_epoch=25, verbose=verbose)
-        y_train_noise = weak_model.predict(X_train, batch_size=batch_size,
-                                           verbose=verbose)
-        y_train_noise_peak = np.argmax(y_train_noise, axis=-1)
-        if perm in ['weak_hard']:
-            y_train_noise = y_train_noise_peak
-    else:
+    if True:
         y_train_noise = y_train.copy()
         y_train_noise[noise_idx] = noise[noise_idx]
         y_train_noise_peak = y_train_noise
@@ -641,6 +485,11 @@ for noise_level in tqdm(noise_levels):
             print('Trying again in 10sec')
             time.sleep(10)
 
+            
+            
+            
+            
+            
     if PRETRAIN:
         #  start training with the best baseline model we have for the same
         #  noise (permutation and level of noise)
@@ -691,15 +540,21 @@ for noise_level in tqdm(noise_levels):
         else:
             raise Exception('ABORTING because the baseline model file was not found'
                             'consider re-running with --beta=1')
-        if verbose:
-            print('Baseline classification', eval(model))
+            
+        if verbose: # show detailed information
+            print('Loaded Baseline classification', eval(model))
+            
+            
         if trainable:
             if MODEL in [SIMPLE, COMPLEX] and PRETRAIN < 3:
                 # build confusion matrix (prediction,noisy_label)
                 ybaseline_predict = model.predict(fix_input(X_train),
                                                   batch_size=batch_size)[1]
                 perm_bias_weights = np.zeros((nb_classes, nb_classes))
-                if PRETRAIN_SOFT:
+                
+                
+                if PRETRAIN_SOFT:   #--pretrain_soft', action='store_true', default=False,help="Use soft 
+                                    # confusion matrix in pretraining"
                     for n, p in zip(y_train_noise, ybaseline_predict):
                         perm_bias_weights[:, n] += p
                 else:
@@ -710,6 +565,7 @@ for noise_level in tqdm(noise_levels):
                     else:
                         for n, p in zip(y_train_noise, ybaseline_predict):
                             perm_bias_weights[p, :] += n
+                            
                 if args.sparse is not None:
                     # for each output from the baseline model, keep track
                     # which outputs we want it to affect.
@@ -722,9 +578,11 @@ for noise_level in tqdm(noise_levels):
                         sparse_mask[i, channel_input_idx[i, args.sparse:]] = 0.
                     # zero also the matching places in the confusion matrix
                     perm_bias_weights = perm_bias_weights * sparse_mask
+                    
                 perm_bias_weights /= perm_bias_weights.sum(axis=1, keepdims=True)
                 # perm_bias_weights[prediction,noisy_label] = log(P(noisy_label|prediction))
                 perm_bias_weights = np.log(perm_bias_weights + 1e-8)
+                
                 for i in range(nb_classes):
                     if MODEL == SIMPLE:
                         #  given we predict <i> in the baseline model,
